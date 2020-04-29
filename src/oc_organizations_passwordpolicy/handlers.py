@@ -141,7 +141,7 @@ def _retrieve_password_policy(
         client = session.client('iam')
         response = client.get_account_password_policy()
         merged = {**vars(model), **response['PasswordPolicy']}
-        model = ResourceModel(**merged)
+        model = PasswordPolicy(**merged)
         if model.ResourceId is None:
             model.ResourceId = logical_resource_identifier
         LOG.info(f"{TYPE_NAME} [{model.ResourceId}] [{logical_resource_identifier}] successfully retrieved.")
