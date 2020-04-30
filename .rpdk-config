@@ -1,10 +1,11 @@
 {
     "typeName": "OC::Organizations::PasswordPolicy",
-    "language": "python37",
-    "runtime": "python3.7",
-    "entrypoint": "oc_organizations_passwordpolicy.handlers.resource",
-    "testEntrypoint": "oc_organizations_passwordpolicy.handlers.test_entrypoint",
+    "language": "typescript",
+    "runtime": "nodejs12.x",
+    "entrypoint": "dist/handlers.entrypoint",
+    "testEntrypoint": "dist/handlers.testEntrypoint",
     "settings": {
-        "use_docker": true
+        "useDocker": false,
+        "buildCommand": "npm run build && NPM_CONFIG_OPTIONAL=0 sam build --build-dir ./build --debug"
     }
 }

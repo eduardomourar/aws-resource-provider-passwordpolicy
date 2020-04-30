@@ -10,14 +10,13 @@ Resources:
   TypeFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: oc_organizations_passwordpolicy.handlers.resource
-      Runtime: python3.7
-      CodeUri: build/
+      Handler: dist/handlers.entrypoint
+      Runtime: nodejs12.x
+      CodeUri: ./
 
   TestEntrypoint:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: oc_organizations_passwordpolicy.handlers.test_entrypoint
-      Runtime: python3.7
-      CodeUri: build/
-
+      Handler: dist/handlers.testEntrypoint
+      Runtime: nodejs12.x
+      CodeUri: ./

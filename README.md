@@ -1,39 +1,14 @@
 # OC::Organizations::PasswordPolicy
 
-Congratulations on starting development! Next steps:
+This CloudFormation Resource Provider sets an IAM Password Policy for a target AWS account. Note that IAM password policies are global, and this will apply to all regions.
 
-1. Write the JSON schema describing your resource, `oc-organizations-passwordpolicy.json`
-2. Implement your resource handlers in `oc_organizations_passwordpolicy/handlers.py`
+## Usage
 
-> Don't modify `models.py` by hand, any modifications will be overwritten when the `generate` or `package` commands are run.
+1. Check the JSON schema describing the resource, [oc-organizations-passwordpolicy.json](./oc-organizations-passwordpolicy.json)
+2. Run `npm install --optional`
+3. Customize the resource handlers to your needs in [handlers.ts](./src/handlers.ts)
+4. Build the project with `npm run build`
+5. Follow the steps on the AWS documentation to submit to the CloudFormation registry: https://docs.aws.amazon.com/cloudformation-cli/latest/userguide/resource-types.html
+6. Use [this template](./sample.yml) to deploy a sample password policy resource
 
-Implement CloudFormation resource here. Each function must always return a ProgressEvent.
-
-```python
-ProgressEvent(
-    # Required
-    # Must be one of OperationStatus.IN_PROGRESS, OperationStatus.FAILED, OperationStatus.SUCCESS
-    status=OperationStatus.IN_PROGRESS,
-    # Required on SUCCESS (except for LIST where resourceModels is required)
-    # The current resource model after the operation; instance of ResourceModel class
-    resourceModel=model,
-    resourceModels=None,
-    # Required on FAILED
-    # Customer-facing message, displayed in e.g. CloudFormation stack events
-    message="",
-    # Required on FAILED: a HandlerErrorCode
-    errorCode=HandlerErrorCode.InternalFailure,
-    # Optional
-    # Use to store any state between re-invocation via IN_PROGRESS
-    callbackContext={},
-    # Required on IN_PROGRESS
-    # The number of seconds to delay before re-invocation
-    callbackDelaySeconds=0,
-)
-```
-
-Failures can be passed back to CloudFormation by either raising an exception from `cloudformation_cli_python_lib.exceptions`, or setting the ProgressEvent's `status` to `OperationStatus.FAILED` and `errorCode` to one of `cloudformation_cli_python_lib.HandlerErrorCode`. There is a static helper function, `ProgressEvent.failed`, for this common case.
-
-## What's with the type hints?
-
-We hope they'll be useful for getting started quicker with an IDE that support type hints. Type hints are optional - if your code doesn't use them, it will still work.
+> Don't modify [models.ts](./src/models.ts) by hand, any modifications will be overwritten when the `generate` or `package` commands are run.
