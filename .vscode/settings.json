@@ -1,8 +1,0 @@
-{
-    "python.pythonPath": ".venv/bin/python",
-    "python.venvPath": "${workspaceFolder}/.venv",
-    "python.linting.pylintEnabled": true,
-    "python.linting.enabled": true,
-    "debug.internalConsoleOptions": "neverOpen",
-    "search.followSymlinks": false
-}
