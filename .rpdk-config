@@ -6,6 +6,6 @@
     "testEntrypoint": "dist/handlers.testEntrypoint",
     "settings": {
         "useDocker": false,
-        "buildCommand": "npm run build && NPM_CONFIG_OPTIONAL=0 sam build --build-dir ./build --debug"
+        "buildCommand": "npm run build && NPM_CONFIG_OPTIONAL=0 NPM_CONFIG_FUND=0 sam build --build-dir ./build --debug"
     }
 }
