@@ -1,7 +1,7 @@
 // This is a generated file. Modifications will be overwritten.
-import { BaseResourceModel, Optional } from 'cfn-rpdk';
+import { BaseModel, Optional } from 'cfn-rpdk';
 
-export class ResourceModel extends BaseResourceModel {
+export class ResourceModel extends BaseModel {
     ['constructor']: typeof ResourceModel;
     public static readonly TYPE_NAME: string = 'OC::Organizations::PasswordPolicy';
 

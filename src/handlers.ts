@@ -73,8 +73,11 @@ class PasswordPolicy extends ResourceModel {
     HardExpiry: Optional<boolean>;
 
     public static fromObject(input: object): PasswordPolicy {
-        const serializer = new TypedJSON(PasswordPolicy);
-        return serializer.parse(input);
+        if (input) {
+            const serializer = new TypedJSON(PasswordPolicy);
+            return serializer.parse(input);
+        }
+        return null;
     }
 
     public toObject(): any {
@@ -87,26 +90,26 @@ class PasswordPolicy extends ResourceModel {
  * Retrieves the password policy for the AWS account.
  * 
  * @param session Current AWS session passed through from caller
- * @param resourceId The resource unique identifier
  * @param logicalResourceId The logical name of the resource as specified
  * in the template
+ * @param resourceId The resource unique identifier
  */
 const retrievePasswordPolicy = async (
     session: SessionProxy,
-    resourceId: Optional<string>,
-    logicalResourceId: Optional<string>
+    logicalResourceId?: string,
+    resourceId?: string
 ): Promise<PasswordPolicy> => {
-    let model: PasswordPolicy = null;
+    let result: PasswordPolicy = null;
     try {
         if (session instanceof SessionProxy) {
             const client = session.client('IAM') as IAM;
             const response = await client.getAccountPasswordPolicy().promise();
             // LOGGER.debug('getAccountPasswordPolicy response', response);
-            model = PasswordPolicy.fromObject(response.PasswordPolicy);
-            model.ResourceId = resourceId || logicalResourceId;
+            result = PasswordPolicy.fromObject(response.PasswordPolicy);
+            result.ResourceId = resourceId;
             LOGGER.info(
                 PasswordPolicy.TYPE_NAME,
-                `[${model.ResourceId}] [${logicalResourceId}]`,
+                `[${result.ResourceId}] [${logicalResourceId}]`,
                 'successfully retrieved.'
             );
         }
@@ -121,11 +124,11 @@ const retrievePasswordPolicy = async (
             throw err;
         }
     }
-    return Promise.resolve(model);
+    return Promise.resolve(result);
 };
 
 /**
- * Updates or insert the password policy settings for the AWS account. This operation does not
+ * Updates or inserts the password policy settings for the AWS account. This operation does not
  * support partial updates. No parameters are required, but if you do not specify a
  * parameter, that parameter's value reverts to its default value.
  * 
@@ -133,26 +136,28 @@ const retrievePasswordPolicy = async (
  * @param model The updated options for the password policy
  * @param logicalResourceId The logical name of the resource as specified
  * in the template
+ * @param resourceId The resource unique identifier
  */
 const upsertPasswordPolicy = async (
     session: SessionProxy,
     model: PasswordPolicy,
-    logicalResourceId: Optional<string>
+    logicalResourceId?: string,
+    resourceId?: string
 ): Promise<PasswordPolicy> => {
+    let result: PasswordPolicy = null;
     try {
         if (session instanceof SessionProxy) {
             const client = session.client('IAM') as IAM;
             const params = model.toObject();
             delete params['ResourceId'];
-            // LOGGER.debug('updateAccountPasswordPolicy params', params);
+            // LOGGER.debug('updateAccountPasswordPolicy input', params);
             const response = await client.updateAccountPasswordPolicy(params).promise();
             // LOGGER.debug('updateAccountPasswordPolicy response', response);
-            if (!model.ResourceId) {
-                model.ResourceId = uuidv4();
-            }
+            result = PasswordPolicy.fromObject(params);
+            result.ResourceId = resourceId || uuidv4();
             LOGGER.info(
                 PasswordPolicy.TYPE_NAME,
-                `[${model.ResourceId}] [${logicalResourceId}]`,
+                `[${result.ResourceId}] [${logicalResourceId}]`,
                 'successfully upserted.'
             );
         }
@@ -160,7 +165,7 @@ const upsertPasswordPolicy = async (
         LOGGER.log(err);
         throw new exceptions.InternalFailure(err.message);
     }
-    return Promise.resolve(model);
+    return Promise.resolve(result);
 }
 
 class Resource extends BaseResource<ResourceModel> {
@@ -179,17 +184,38 @@ class Resource extends BaseResource<ResourceModel> {
         request: ResourceHandlerRequest<ResourceModel>,
         callbackContext: Map<string, any>
     ): Promise<ProgressEvent> {
+        // LOGGER.debug('CREATE request', request);
+        // LOGGER.debug('CREATE callbackContext', callbackContext);
+        const callbackToken = callbackContext.get('CallbackToken');
+        if (!callbackToken && request.desiredResourceState.ResourceId) {
+            LOGGER.info(
+                this.typeName,
+                `[${request.desiredResourceState.ResourceId}] [${request.logicalResourceIdentifier}]`,
+                'cannot contain identifier.'
+            );
+            throw new exceptions.InvalidRequest('Resource identifier cannot be provided during creation.');
+        }
         request.desiredResourceState = PasswordPolicy.fromObject(request.desiredResourceState);
         request.previousResourceState = PasswordPolicy.fromObject(request.previousResourceState);
-        // LOGGER.debug('CREATE request', request);
         let model: PasswordPolicy = request.desiredResourceState;
         const progress: ProgressEvent<PasswordPolicy> = ProgressEvent.builder()
             .status(OperationStatus.InProgress)
             .resourceModel(model)
             .build() as ProgressEvent<PasswordPolicy>;
-        model = await upsertPasswordPolicy(session, model, request.logicalResourceIdentifier);
+        if (callbackToken) {
+            model = await retrievePasswordPolicy(
+                session,
+                request.logicalResourceIdentifier,
+                callbackToken
+            );
+            progress.status = OperationStatus.Success;
+        } else {
+            model = await upsertPasswordPolicy(session, model, request.logicalResourceIdentifier);
+            progress.callbackContext = new Map<string, any>();
+            progress.callbackContext.set('CallbackToken', model.ResourceId);
+            progress.callbackDelaySeconds = 2;
+        }
         progress.resourceModel = model;
-        progress.status = OperationStatus.Success;
         LOGGER.info('CREATE progress', progress.toObject());
         return progress;
     }
@@ -208,9 +234,20 @@ class Resource extends BaseResource<ResourceModel> {
         request: ResourceHandlerRequest<ResourceModel>,
         callbackContext: Map<string, any>
     ): Promise<ProgressEvent> {
+        // LOGGER.debug('UPDATE request', request);
+        const resourceId = request.previousResourceState.ResourceId;
+        if (!request.desiredResourceState.ResourceId) {
+            throw new exceptions.NotFound(this.typeName, request.desiredResourceState.ResourceId);
+        } else if(request.desiredResourceState.ResourceId !== resourceId) {
+            LOGGER.info(
+                this.typeName,
+                `[NEW ${request.desiredResourceState.ResourceId}] [${request.logicalResourceIdentifier}]`,
+                `does not match identifier from saved resource [OLD ${resourceId}].`
+            );
+            throw new exceptions.NotUpdatable('No resource matching the provided identifier.');
+        }
         request.desiredResourceState = PasswordPolicy.fromObject(request.desiredResourceState);
         request.previousResourceState = PasswordPolicy.fromObject(request.previousResourceState);
-        // LOGGER.debug('UPDATE request', request);
         let model: PasswordPolicy = request.desiredResourceState;
         const progress: ProgressEvent<PasswordPolicy> = ProgressEvent.builder()
             .status(OperationStatus.InProgress)
@@ -218,15 +255,13 @@ class Resource extends BaseResource<ResourceModel> {
             .build() as ProgressEvent<PasswordPolicy>;
         await retrievePasswordPolicy(
             session,
-            model.ResourceId,
-            request.logicalResourceIdentifier
+            request.logicalResourceIdentifier,
+            resourceId
         );
-        model = await upsertPasswordPolicy(session, model, request.logicalResourceIdentifier);
+        model = await upsertPasswordPolicy(session, model, request.logicalResourceIdentifier, resourceId);
         // LOGGER.debug('UPDATE model', model);
         progress.resourceModel = model;
         progress.status = OperationStatus.Success;
-        // progress.callbackContext = new Map<string, any>();
-        // callbackContext.set('RequestId', 'e9899120-8e56-11ea-bfb5-02722d612c06');
         LOGGER.info('UPDATE progress', progress.toObject());
         return progress;
     }
@@ -246,33 +281,34 @@ class Resource extends BaseResource<ResourceModel> {
         request: ResourceHandlerRequest<ResourceModel>,
         callbackContext: Map<string, any>
     ): Promise<ProgressEvent> {
+        // LOGGER.debug('DELETE request', request);
         request.desiredResourceState = PasswordPolicy.fromObject(request.desiredResourceState);
         request.previousResourceState = PasswordPolicy.fromObject(request.previousResourceState);
-        // LOGGER.debug('DELETE request', request);
         let model: PasswordPolicy = request.desiredResourceState;
         const progress: ProgressEvent<PasswordPolicy> = ProgressEvent.builder()
             .status(OperationStatus.InProgress)
-            .resourceModel(model)
             .build() as ProgressEvent<PasswordPolicy>;
         model = await retrievePasswordPolicy(
             session,
-            model.ResourceId,
-            request.logicalResourceIdentifier
+            request.logicalResourceIdentifier,
+            model.ResourceId
         );
-        try {
-            if (session instanceof SessionProxy) {
-                const client = session.client('IAM') as IAM;
-                const response = await client.deleteAccountPasswordPolicy().promise();
-                // LOGGER.debug('deleteAccountPasswordPolicy response', response);
-                LOGGER.info(
-                    this.typeName,
-                    `[${model.ResourceId}] [${request.logicalResourceIdentifier}]`,
-                    'successfully deleted.'
-                );
+        if (model) {
+            try {
+                if (session instanceof SessionProxy) {
+                    const client = session.client('IAM') as IAM;
+                    const response = await client.deleteAccountPasswordPolicy().promise();
+                    // LOGGER.debug('deleteAccountPasswordPolicy response', response);
+                    LOGGER.info(
+                        this.typeName,
+                        `[${model.ResourceId}] [${request.logicalResourceIdentifier}]`,
+                        'successfully deleted.'
+                    );
+                }
+            } catch(err) {
+                LOGGER.log(err);
+                throw new exceptions.InternalFailure(err.message);
             }
-        } catch(err) {
-            LOGGER.log(err);
-            throw new exceptions.InternalFailure(err.message);
         }
         progress.status = OperationStatus.Success;
         LOGGER.info('DELETE progress', progress.toObject());
@@ -293,13 +329,13 @@ class Resource extends BaseResource<ResourceModel> {
         request: ResourceHandlerRequest<ResourceModel>,
         callbackContext: Map<string, any>
     ): Promise<ProgressEvent> {
+        // LOGGER.debug('READ request', request);
         request.desiredResourceState = PasswordPolicy.fromObject(request.desiredResourceState);
         request.previousResourceState = PasswordPolicy.fromObject(request.previousResourceState);
-        // LOGGER.debug('READ request', request);
         const model: PasswordPolicy = await retrievePasswordPolicy(
             session,
-            request.desiredResourceState.ResourceId,
-            request.logicalResourceIdentifier
+            request.logicalResourceIdentifier,
+            request.desiredResourceState.ResourceId
         );
         const progress: ProgressEvent<PasswordPolicy> = ProgressEvent.builder()
             .status(OperationStatus.Success)
@@ -323,15 +359,15 @@ class Resource extends BaseResource<ResourceModel> {
         request: ResourceHandlerRequest<ResourceModel>,
         callbackContext: Map<string, any>
     ): Promise<ProgressEvent> {
+        // LOGGER.debug('LIST request', request);
         request.desiredResourceState = PasswordPolicy.fromObject(request.desiredResourceState);
         request.previousResourceState = PasswordPolicy.fromObject(request.previousResourceState);
-        // LOGGER.debug('LIST request', request);
         const models: Array<PasswordPolicy> = [];
         try {
             const model: PasswordPolicy = await retrievePasswordPolicy(
                 session,
-                request.desiredResourceState.ResourceId,
-                request.logicalResourceIdentifier
+                request.logicalResourceIdentifier,
+                request.desiredResourceState.ResourceId
             );
             models.push(model);
         } catch(err) {
